@@ -216,6 +216,9 @@
     <ClCompile Include="..\Shared\treelist\treelist.c">
       <Filter>treelist</Filter>
     </ClCompile>
+    <ClCompile Include="drvhelper.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">
@@ -384,6 +387,12 @@
     </ClInclude>
     <ClInclude Include="winedebug.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="drvhelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Shared\ntos\halamd64.h">
+      <Filter>ntos</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

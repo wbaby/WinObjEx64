@@ -5,9 +5,9 @@
 *
 *  TITLE:       NTOS.H
 *
-*  VERSION:     1.126
+*  VERSION:     1.128
 *
-*  DATE:        22 Jan 2020
+*  DATE:        12 Feb 2020
 *
 *  Common header file for the ntos API functions and definitions.
 *
@@ -7341,7 +7341,62 @@ RtlCopySecurityDescriptor(
     _In_ PSECURITY_DESCRIPTOR InputSecurityDescriptor,
     _Out_ PSECURITY_DESCRIPTOR *OutputSecurityDescriptor);
 
-FORCEINLINE LUID NTAPI RtlConvertLongToLuid(
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlMakeSelfRelativeSD(
+    _In_ PSECURITY_DESCRIPTOR AbsoluteSecurityDescriptor,
+    _Out_writes_bytes_(*BufferLength) PSECURITY_DESCRIPTOR SelfRelativeSecurityDescriptor,
+    _Inout_ PULONG BufferLength);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlAbsoluteToSelfRelativeSD(
+    _In_ PSECURITY_DESCRIPTOR AbsoluteSecurityDescriptor,
+    _Out_writes_bytes_to_opt_(*BufferLength, *BufferLength) PSECURITY_DESCRIPTOR SelfRelativeSecurityDescriptor,
+    _Inout_ PULONG BufferLength);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlSetDaclSecurityDescriptor(
+    _Inout_ PSECURITY_DESCRIPTOR SecurityDescriptor,
+    _In_ BOOLEAN DaclPresent,
+    _In_opt_ PACL Dacl,
+    _In_opt_ BOOLEAN DaclDefaulted);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlGetDaclSecurityDescriptor(
+    _In_ PSECURITY_DESCRIPTOR SecurityDescriptor,
+    _Out_ PBOOLEAN DaclPresent,
+    _Out_ PACL* Dacl,
+    _Out_ PBOOLEAN DaclDefaulted);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlSetSaclSecurityDescriptor(
+    _Inout_ PSECURITY_DESCRIPTOR SecurityDescriptor,
+    _In_ BOOLEAN SaclPresent,
+    _In_opt_ PACL Sacl,
+    _In_opt_ BOOLEAN SaclDefaulted);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlGetSaclSecurityDescriptor(
+    _In_ PSECURITY_DESCRIPTOR SecurityDescriptor,
+    _Out_ PBOOLEAN SaclPresent,
+    _Out_ PACL* Sacl,
+    _Out_ PBOOLEAN SaclDefaulted);
+
+FORCEINLINE 
+LUID 
+NTAPI 
+RtlConvertLongToLuid(
     _In_ LONG Long
 )
 {
@@ -7352,6 +7407,20 @@ FORCEINLINE LUID NTAPI RtlConvertLongToLuid(
     TempLuid.LowPart = TempLi.LowPart;
     TempLuid.HighPart = TempLi.HighPart;
     return(TempLuid);
+}
+
+FORCEINLINE 
+LUID 
+RtlConvertUlongToLuid(
+    _In_ ULONG Ulong
+)
+{
+    LUID tempLuid;
+
+    tempLuid.LowPart = Ulong;
+    tempLuid.HighPart = 0;
+
+    return tempLuid;
 }
 
 NTSYSAPI

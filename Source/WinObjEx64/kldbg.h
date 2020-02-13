@@ -4,9 +4,9 @@
 *
 *  TITLE:       KLDBG.H
 *
-*  VERSION:     1.83
+*  VERSION:     1.84
 *
-*  DATE:        13 Jan 2019
+*  DATE:        13 Feb 2019
 *
 *  Common header file for the Kernel Debugger Driver support.
 *
@@ -21,8 +21,11 @@
 #define IOCTL_KD_PASS_THROUGH CTL_CODE(FILE_DEVICE_UNKNOWN, 0x1, METHOD_NEITHER, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
 #ifdef _USE_OWN_DRIVER 
-#define KLDBGDRV                L"wodbgdrv"
+#define KLDBGDRV                L"EneIo"
 #define KLDBGDRVSYS             L"\\drivers\\wodbgdrv.sys"
+
+//#define KLDBGDRV                L"wodbgdrv"
+//#define KLDBGDRVSYS             L"\\drivers\\wodbgdrv.sys"
 #else
 #define KLDBGDRV                L"kldbgdrv"
 #define KLDBGDRVSYS             L"\\drivers\\kldbgdrv.sys"
@@ -202,10 +205,10 @@ typedef struct _OBJREF {
 #define NT_WIN10_19H2           18363
 
 // Windows 10 20H1
-#define NTX_WIN10_20H1           19037
+#define NTX_WIN10_20H1          19037
 
 // Windows 10 20H2
-#define NTX_WIN10_20H2           19536
+#define NTX_WIN10_20H2          19536
 
 //
 // Defines for boundary descriptors
@@ -360,12 +363,17 @@ BOOL kdFindKiServiceTable(
 ULONG_PTR kdQueryWin32kApiSetTable(
     _In_ HMODULE hWin32k);
 
-BOOL kdReadSystemMemoryEx(
+BOOL kdpReadSystemMemoryEx(
     _In_ ULONG_PTR Address,
     _Inout_ PVOID Buffer,
     _In_ ULONG BufferSize,
     _Out_opt_ PULONG NumberOfBytesRead);
 
+#ifdef _USE_OWN_DRIVER
+#define kdReadSystemMemoryEx WinIoReadSystemMemoryEx
+#else 
+#define kdReadSystemMemoryEx kdpReadSystemMemoryEx
+#endif
 #define kdReadSystemMemory(Address, Buffer, BufferSize) \
     kdReadSystemMemoryEx(Address, Buffer, BufferSize, NULL)
 

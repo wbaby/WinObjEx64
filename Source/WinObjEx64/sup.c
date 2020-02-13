@@ -4,9 +4,9 @@
 *
 *  TITLE:       SUP.C
 *
-*  VERSION:     1.83
+*  VERSION:     1.84
 *
-*  DATE:        26 Jan 2020
+*  DATE:        12 Feb 2020
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -1203,7 +1203,7 @@ VOID supRunAsAdmin(
 )
 {
     SHELLEXECUTEINFO shinfo;
-    WCHAR szPath[MAX_PATH + 1];  
+    WCHAR szPath[MAX_PATH + 1];
 
     RtlSecureZeroMemory(&szPath, sizeof(szPath));
     if (GetModuleFileName(NULL, szPath, MAX_PATH)) {
@@ -1363,7 +1363,7 @@ BOOL supIsSymbolicLinkObject(
 )
 {
     LVITEM lvItem;
-    
+
     lvItem.mask = LVIF_PARAM;
     lvItem.iItem = iItem;
     lvItem.iSubItem = 0;
@@ -1538,6 +1538,105 @@ BOOL supxQueryKnownDllsLink(
 }
 
 /*
+* supSetProcessMitigationImagesPolicy
+*
+* Purpose:
+*
+* Enable images policy mitigation.
+*
+* N.B. Must be called after plugin manager initialization.
+*
+*/
+VOID supSetProcessMitigationImagesPolicy()
+{
+    PROCESS_MITIGATION_POLICY_INFORMATION policyInfo;
+
+    if (g_WinObj.EnableFullMitigations) {
+
+        policyInfo.Policy = (PROCESS_MITIGATION_POLICY)ProcessSignaturePolicy;
+        policyInfo.SignaturePolicy.Flags = 0;
+        policyInfo.SignaturePolicy.MicrosoftSignedOnly = TRUE;
+        policyInfo.SignaturePolicy.MitigationOptIn = TRUE;
+
+        NtSetInformationProcess(NtCurrentProcess(),
+            ProcessMitigationPolicy,
+            &policyInfo,
+            sizeof(PROCESS_MITIGATION_POLICY_INFORMATION));
+
+        policyInfo.Policy = (PROCESS_MITIGATION_POLICY)ProcessImageLoadPolicy;
+        policyInfo.ImageLoadPolicy.Flags = 0;
+        policyInfo.ImageLoadPolicy.PreferSystem32Images = TRUE;
+        policyInfo.ImageLoadPolicy.NoLowMandatoryLabelImages = TRUE;
+
+        NtSetInformationProcess(NtCurrentProcess(),
+            ProcessMitigationPolicy,
+            &policyInfo,
+            sizeof(PROCESS_MITIGATION_POLICY_INFORMATION));
+
+    }
+}
+
+/*
+* supxSetProcessMitigationPolicies
+*
+* Purpose:
+*
+* Enable mitigations.
+*
+*/
+VOID supxSetProcessMitigationPolicies()
+{
+    PROCESS_MITIGATION_POLICY_INFORMATION policyInfo;
+
+    if (g_WinObj.EnableFullMitigations) {
+
+        policyInfo.Policy = (PROCESS_MITIGATION_POLICY)ProcessExtensionPointDisablePolicy;
+        policyInfo.ExtensionPointDisablePolicy.Flags = 0;
+        policyInfo.ExtensionPointDisablePolicy.DisableExtensionPoints = TRUE;
+
+        NtSetInformationProcess(NtCurrentProcess(),
+            ProcessMitigationPolicy,
+            &policyInfo,
+            sizeof(PROCESS_MITIGATION_POLICY_INFORMATION));
+
+        policyInfo.Policy = (PROCESS_MITIGATION_POLICY)ProcessASLRPolicy;
+        policyInfo.ASLRPolicy.Flags = 0;
+        policyInfo.ASLRPolicy.EnableHighEntropy = TRUE;
+        policyInfo.ASLRPolicy.EnableBottomUpRandomization = TRUE;
+        policyInfo.ASLRPolicy.EnableForceRelocateImages = TRUE;
+
+        NtSetInformationProcess(NtCurrentProcess(),
+            ProcessMitigationPolicy,
+            &policyInfo,
+            sizeof(PROCESS_MITIGATION_POLICY_INFORMATION));
+
+        policyInfo.Policy = (PROCESS_MITIGATION_POLICY)ProcessDynamicCodePolicy;
+        policyInfo.DynamicCodePolicy.Flags = 0;
+        policyInfo.DynamicCodePolicy.ProhibitDynamicCode = TRUE;
+
+        NtSetInformationProcess(NtCurrentProcess(),
+            ProcessMitigationPolicy,
+            &policyInfo,
+            sizeof(PROCESS_MITIGATION_POLICY_INFORMATION));
+
+        /*
+
+        Enabled by settings for Release variants
+
+        policyInfo.Policy = (PROCESS_MITIGATION_POLICY)ProcessControlFlowGuardPolicy;
+        policyInfo.ControlFlowGuardPolicy.Flags = 0;
+        policyInfo.ControlFlowGuardPolicy.EnableControlFlowGuard = TRUE;
+
+        NtSetInformationProcess(NtCurrentProcess(),
+            ProcessMitigationPolicy,
+            &policyInfo,
+            sizeof(PROCESS_MITIGATION_POLICY_INFORMATION));
+        */
+
+    }
+}
+
+/*
 * supInit
 *
 * Purpose:
@@ -1552,6 +1651,8 @@ VOID supInit(
 )
 {
     NTSTATUS status;
+
+    supxSetProcessMitigationPolicies();
 
 #pragma warning(push)
 #pragma warning(disable: 6031)
@@ -1574,7 +1675,7 @@ VOID supInit(
 #ifdef _DEBUG
         DbgPrint("ExApiSetInit() %lx\r\n", status);
 #endif
-    }
+}
 
     //
     // Remember current DPI value.
@@ -1704,11 +1805,11 @@ BOOL supQueryLinkTarget(
         return bResult;
     }
 
-    InitializeObjectAttributes(&objectAttr, 
+    InitializeObjectAttributes(&objectAttr,
         ObjectName, OBJ_CASE_INSENSITIVE, RootDirectoryHandle, NULL);
-    
-    ntStatus = NtOpenSymbolicLinkObject(&linkHandle, 
-        SYMBOLIC_LINK_QUERY, 
+
+    ntStatus = NtOpenSymbolicLinkObject(&linkHandle,
+        SYMBOLIC_LINK_QUERY,
         &objectAttr);
 
     if (!NT_SUCCESS(ntStatus) || (linkHandle == NULL)) {
@@ -1724,8 +1825,8 @@ BOOL supQueryLinkTarget(
     infoUString.Length = (USHORT)cLength;
     infoUString.MaximumLength = (USHORT)(cLength + sizeof(UNICODE_NULL));
 
-    ntStatus = NtQuerySymbolicLinkObject(linkHandle, 
-        &infoUString, 
+    ntStatus = NtQuerySymbolicLinkObject(linkHandle,
+        &infoUString,
         NULL);
 
     bResult = (NT_SUCCESS(ntStatus));
@@ -6538,7 +6639,147 @@ ULONG supHashString(
 *
 */
 ULONG supHashUnicodeString(
-    _In_ CONST UNICODE_STRING* String)
+    _In_ CONST UNICODE_STRING * String)
 {
     return supHashString(String->Buffer, String->Length / sizeof(WCHAR));
+}
+
+/*
+* supCreateSystemAdminAccessSelfRelativeSD
+*
+* Purpose:
+*
+* Create self-relative security descriptor with Admin/System ACL set.
+*
+*/
+NTSTATUS supCreateSystemAdminAccessSelfRelativeSD(
+    _Out_ PSECURITY_DESCRIPTOR * SelfRelativeSD,
+    _Out_ PULONG Length
+)
+{
+    NTSTATUS ntStatus = STATUS_UNSUCCESSFUL;
+    PSID admSid = NULL;
+    PSID sysSid = NULL;
+    PACL sysAcl = NULL;
+    ULONG daclSize = 0, bufferSize = 0;
+
+    SECURITY_DESCRIPTOR securityDescriptor;
+    PSECURITY_DESCRIPTOR selfRelativeSecurityDescriptor = NULL;
+
+    SID_IDENTIFIER_AUTHORITY sidAuthority = SECURITY_NT_AUTHORITY;
+
+    *SelfRelativeSD = NULL;
+    *Length = 0;
+
+    do {
+
+        admSid = (PSID)supHeapAlloc(RtlLengthRequiredSid(2));
+        if (admSid == NULL) {
+            ntStatus = STATUS_MEMORY_NOT_ALLOCATED;
+            break;
+        }
+
+        sysSid = (PSID)supHeapAlloc(RtlLengthRequiredSid(1));
+        if (sysSid == NULL) {
+            ntStatus = STATUS_MEMORY_NOT_ALLOCATED;
+            break;
+        }
+
+        ntStatus = RtlInitializeSid(admSid, &sidAuthority, 2);
+        if (NT_SUCCESS(ntStatus)) {
+            *RtlSubAuthoritySid(admSid, 0) = SECURITY_BUILTIN_DOMAIN_RID;
+            *RtlSubAuthoritySid(admSid, 1) = DOMAIN_ALIAS_RID_ADMINS;
+        }
+        else {
+            break;
+        }
+
+        ntStatus = RtlInitializeSid(sysSid, &sidAuthority, 1);
+        if (NT_SUCCESS(ntStatus)) {
+            *RtlSubAuthoritySid(sysSid, 0) = SECURITY_LOCAL_SYSTEM_RID;
+        }
+        else {
+            break;
+        }
+
+        daclSize = sizeof(ACL) + (2 * sizeof(ACCESS_ALLOWED_ACE)) +
+            RtlLengthSid(admSid) + RtlLengthSid(sysSid) + 64;
+
+        sysAcl = (PACL)supHeapAlloc(daclSize);
+        if (sysAcl == NULL) {
+            ntStatus = STATUS_MEMORY_NOT_ALLOCATED;
+            break;
+        }
+
+        ntStatus = RtlCreateAcl(sysAcl, daclSize, ACL_REVISION);
+        if (!NT_SUCCESS(ntStatus))
+            break;
+
+        ntStatus = RtlAddAccessAllowedAce(sysAcl,
+            ACL_REVISION,
+            GENERIC_ALL,
+            sysSid);
+
+        if (!NT_SUCCESS(ntStatus))
+            break;
+
+        ntStatus = RtlAddAccessAllowedAce(sysAcl,
+            ACL_REVISION,
+            GENERIC_ALL,
+            admSid);
+
+        if (!NT_SUCCESS(ntStatus))
+            break;
+
+        RtlSecureZeroMemory(&securityDescriptor, sizeof(SECURITY_DESCRIPTOR));
+
+        ntStatus = RtlCreateSecurityDescriptor(&securityDescriptor,
+            SECURITY_DESCRIPTOR_REVISION1);
+
+        if (!NT_SUCCESS(ntStatus))
+            break;
+
+        ntStatus = RtlSetDaclSecurityDescriptor(&securityDescriptor,
+            TRUE,
+            sysAcl,
+            FALSE);
+
+        if (!NT_SUCCESS(ntStatus))
+            break;
+
+        ntStatus = RtlAbsoluteToSelfRelativeSD(&securityDescriptor,
+            NULL,
+            &bufferSize);
+
+        if (ntStatus != STATUS_BUFFER_TOO_SMALL)
+            break;
+
+        selfRelativeSecurityDescriptor = (PSECURITY_DESCRIPTOR)supHeapAlloc(bufferSize);
+        if (selfRelativeSecurityDescriptor == NULL) {
+            ntStatus = STATUS_MEMORY_NOT_ALLOCATED;
+            break;
+        }
+
+        ntStatus = RtlAbsoluteToSelfRelativeSD(&securityDescriptor,
+            selfRelativeSecurityDescriptor,
+            &bufferSize);
+
+        if (!NT_SUCCESS(ntStatus))
+            break;
+
+        *SelfRelativeSD = selfRelativeSecurityDescriptor;
+        *Length = bufferSize;
+
+    } while (FALSE);
+
+    if (admSid != NULL) supHeapFree(admSid);
+    if (sysSid != NULL) supHeapFree(sysSid);
+    if (sysAcl != NULL) supHeapFree(sysAcl);
+
+    if (!NT_SUCCESS(ntStatus)) {
+        if (selfRelativeSecurityDescriptor != NULL)
+            supHeapFree(selfRelativeSecurityDescriptor);
+    }
+
+    return ntStatus;
 }
