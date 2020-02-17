@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        12 Feb 2020
+*  DATE:        14 Feb 2020
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -1675,7 +1675,7 @@ VOID supInit(
 #ifdef _DEBUG
         DbgPrint("ExApiSetInit() %lx\r\n", status);
 #endif
-}
+    }
 
     //
     // Remember current DPI value.
@@ -6645,33 +6645,40 @@ ULONG supHashUnicodeString(
 }
 
 /*
-* supCreateSystemAdminAccessSelfRelativeSD
+* supCreateSystemAdminAccessSD
 *
 * Purpose:
 *
-* Create self-relative security descriptor with Admin/System ACL set.
+* Create security descriptor with Admin/System ACL set.
 *
 */
-NTSTATUS supCreateSystemAdminAccessSelfRelativeSD(
-    _Out_ PSECURITY_DESCRIPTOR * SelfRelativeSD,
-    _Out_ PULONG Length
+NTSTATUS supCreateSystemAdminAccessSD(
+    _Out_ PSECURITY_DESCRIPTOR* SecurityDescriptor,
+    _Out_opt_ PULONG Length
 )
 {
     NTSTATUS ntStatus = STATUS_UNSUCCESSFUL;
     PSID admSid = NULL;
     PSID sysSid = NULL;
     PACL sysAcl = NULL;
-    ULONG daclSize = 0, bufferSize = 0;
+    ULONG daclSize = 0;
 
-    SECURITY_DESCRIPTOR securityDescriptor;
-    PSECURITY_DESCRIPTOR selfRelativeSecurityDescriptor = NULL;
+    PSECURITY_DESCRIPTOR securityDescriptor;
 
     SID_IDENTIFIER_AUTHORITY sidAuthority = SECURITY_NT_AUTHORITY;
 
-    *SelfRelativeSD = NULL;
-    *Length = 0;
+    *SecurityDescriptor = NULL;
+
+    if (Length)
+        *Length = 0;
 
     do {
+
+        securityDescriptor = (PSECURITY_DESCRIPTOR)supHeapAlloc(sizeof(SECURITY_DESCRIPTOR));
+        if (securityDescriptor == NULL) {
+            ntStatus = STATUS_MEMORY_NOT_ALLOCATED;
+            break;
+        }
 
         admSid = (PSID)supHeapAlloc(RtlLengthRequiredSid(2));
         if (admSid == NULL) {
@@ -6702,8 +6709,10 @@ NTSTATUS supCreateSystemAdminAccessSelfRelativeSD(
             break;
         }
 
-        daclSize = sizeof(ACL) + (2 * sizeof(ACCESS_ALLOWED_ACE)) +
-            RtlLengthSid(admSid) + RtlLengthSid(sysSid) + 64;
+        daclSize = sizeof(ACL) +
+            (2 * sizeof(ACCESS_ALLOWED_ACE)) +
+            RtlLengthSid(admSid) + RtlLengthSid(sysSid) +
+            SECURITY_DESCRIPTOR_MIN_LENGTH;
 
         sysAcl = (PACL)supHeapAlloc(daclSize);
         if (sysAcl == NULL) {
@@ -6711,7 +6720,7 @@ NTSTATUS supCreateSystemAdminAccessSelfRelativeSD(
             break;
         }
 
-        ntStatus = RtlCreateAcl(sysAcl, daclSize, ACL_REVISION);
+        ntStatus = RtlCreateAcl(sysAcl, daclSize - SECURITY_DESCRIPTOR_MIN_LENGTH, (ULONG)ACL_REVISION);
         if (!NT_SUCCESS(ntStatus))
             break;
 
@@ -6731,15 +6740,13 @@ NTSTATUS supCreateSystemAdminAccessSelfRelativeSD(
         if (!NT_SUCCESS(ntStatus))
             break;
 
-        RtlSecureZeroMemory(&securityDescriptor, sizeof(SECURITY_DESCRIPTOR));
-
-        ntStatus = RtlCreateSecurityDescriptor(&securityDescriptor,
+        ntStatus = RtlCreateSecurityDescriptor(securityDescriptor,
             SECURITY_DESCRIPTOR_REVISION1);
 
         if (!NT_SUCCESS(ntStatus))
             break;
 
-        ntStatus = RtlSetDaclSecurityDescriptor(&securityDescriptor,
+        ntStatus = RtlSetDaclSecurityDescriptor(securityDescriptor,
             TRUE,
             sysAcl,
             FALSE);
@@ -6747,28 +6754,13 @@ NTSTATUS supCreateSystemAdminAccessSelfRelativeSD(
         if (!NT_SUCCESS(ntStatus))
             break;
 
-        ntStatus = RtlAbsoluteToSelfRelativeSD(&securityDescriptor,
-            NULL,
-            &bufferSize);
-
-        if (ntStatus != STATUS_BUFFER_TOO_SMALL)
+        if (!RtlValidSecurityDescriptor(securityDescriptor))
             break;
 
-        selfRelativeSecurityDescriptor = (PSECURITY_DESCRIPTOR)supHeapAlloc(bufferSize);
-        if (selfRelativeSecurityDescriptor == NULL) {
-            ntStatus = STATUS_MEMORY_NOT_ALLOCATED;
-            break;
-        }
+        *SecurityDescriptor = securityDescriptor;
 
-        ntStatus = RtlAbsoluteToSelfRelativeSD(&securityDescriptor,
-            selfRelativeSecurityDescriptor,
-            &bufferSize);
-
-        if (!NT_SUCCESS(ntStatus))
-            break;
-
-        *SelfRelativeSD = selfRelativeSecurityDescriptor;
-        *Length = bufferSize;
+        if (Length)
+            *Length = RtlLengthSecurityDescriptor(securityDescriptor);
 
     } while (FALSE);
 
@@ -6777,9 +6769,29 @@ NTSTATUS supCreateSystemAdminAccessSelfRelativeSD(
     if (sysAcl != NULL) supHeapFree(sysAcl);
 
     if (!NT_SUCCESS(ntStatus)) {
-        if (selfRelativeSecurityDescriptor != NULL)
-            supHeapFree(selfRelativeSecurityDescriptor);
+        if (securityDescriptor != NULL)
+            supHeapFree(securityDescriptor);
     }
 
     return ntStatus;
+}
+
+/*
+* supGetTimeAsSecondsSince1970
+*
+* Purpose:
+*
+* Return seconds since 1970.
+*
+*/
+ULONG supGetTimeAsSecondsSince1970(
+    VOID
+)
+{
+    LARGE_INTEGER fileTime;
+    ULONG seconds = 0;
+
+    GetSystemTimePreciseAsFileTime((PFILETIME)&fileTime);
+    RtlTimeToSecondsSince1970(&fileTime, &seconds);
+    return seconds;
 }

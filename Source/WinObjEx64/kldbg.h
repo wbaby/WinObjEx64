@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        13 Feb 2019
+*  DATE:        15 Feb 2019
 *
 *  Common header file for the Kernel Debugger Driver support.
 *
@@ -21,7 +21,7 @@
 #define IOCTL_KD_PASS_THROUGH CTL_CODE(FILE_DEVICE_UNKNOWN, 0x1, METHOD_NEITHER, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
 #ifdef _USE_OWN_DRIVER 
-#define KLDBGDRV                L"EneIo"
+#define KLDBGDRV                L"EneTechIo"
 #define KLDBGDRVSYS             L"\\drivers\\wodbgdrv.sys"
 
 //#define KLDBGDRV                L"wodbgdrv"

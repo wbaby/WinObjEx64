@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        13 Feb 2019
+*  DATE:        14 Feb 2019
 *
 *  Common header file for the Kernel Driver Helper support.
 *
@@ -32,13 +32,14 @@
 #define IOCTL_WINIO_UNMAP_USER_PHYSICAL_MEMORY   \
     CTL_CODE(FILE_DEVICE_WINIO, WINIO_UNMAP_FUNCID, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-typedef struct _WINIO_PHYSICAL_MEMORY_INFO {
-    ULONG_PTR ViewSize;
-    ULONG_PTR BusAddress; //physical address
+typedef struct _WINIO_PHYSICAL_MEMORY_INFO_EX {
+    ULONG_PTR CommitSize;
+    ULONG_PTR BusAddress;
     HANDLE SectionHandle;
     PVOID BaseAddress;
     PVOID ReferencedObject;
-} WINIO_PHYSICAL_MEMORY_INFO, * PWINIO_PHYSICAL_MEMORYINFO;
+    UCHAR EncryptedKey[16];
+} WINIO_PHYSICAL_MEMORY_INFO_EX, * PWINIO_PHYSICAL_MEMORY_INFO_EX;
 
 //
 // Prototype for read physical memory function.

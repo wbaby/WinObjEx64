@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        12 Feb 2020
+*  DATE:        15 Feb 2020
 *
 *  MINIMUM SUPPORTED OS WINDOWS 7
 *
@@ -2886,7 +2886,7 @@ NTSTATUS kdLoadDeviceDriver(
     _In_ LPCWSTR DriverPath
 )
 {
-    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    NTSTATUS status;
     DWORD dwData, dwResult;
     HKEY keyHandle = NULL;
     SIZE_T keyOffset;
@@ -2903,7 +2903,7 @@ NTSTATUS kdLoadDeviceDriver(
     if (DriverPath == NULL)
         return STATUS_INVALID_PARAMETER_2;
 
-    status = supCreateSystemAdminAccessSelfRelativeSD(&driverSD, &sdLength);
+    status = supCreateSystemAdminAccessSD(&driverSD, &sdLength);
     if (!NT_SUCCESS(status))
         return status;
 

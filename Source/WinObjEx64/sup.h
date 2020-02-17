@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        13 Feb 2020
+*  DATE:        15 Feb 2020
 *
 *  Common header file for the program support routines.
 *
@@ -678,8 +678,11 @@ ULONG supHashString(
 ULONG supHashUnicodeString(
     _In_ CONST UNICODE_STRING* String);
 
-NTSTATUS supCreateSystemAdminAccessSelfRelativeSD(
+NTSTATUS supCreateSystemAdminAccessSD(
     _Out_ PSECURITY_DESCRIPTOR* SelfRelativeSD,
-    _Out_ PULONG Length);
+    _Out_opt_ PULONG Length);
 
 VOID supSetProcessMitigationImagesPolicy();
+
+ULONG supGetTimeAsSecondsSince1970(
+    VOID);

@@ -94,7 +94,6 @@
 #include <malloc.h>
 #endif
 
-
 typedef int(__cdecl *pswprintf_s)(
     wchar_t *buffer,
     size_t sizeOfBuffer,

