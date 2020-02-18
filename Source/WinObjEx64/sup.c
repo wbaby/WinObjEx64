@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        14 Feb 2020
+*  DATE:        18 Feb 2020
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -516,7 +516,6 @@ BOOL supDumpSyscallTableConverted(
     *Table = NULL;
 
     memIO = ServiceLimit * sizeof(ULONG);
-
     ServiceTableDumped = (PULONG)supHeapAlloc(memIO);
     if (ServiceTableDumped) {
         bytesRead = 0;

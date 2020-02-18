@@ -6,7 +6,14 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        14 Feb 2020
+*  DATE:        18 Feb 2020
+*
+*  WinIo based VM-through-PM reader, used only in private builds, WHQL.
+*
+*  Note:
+*
+*    WinObjEx64 apply multiple security mitigations when uses this driver.
+*    WinIo is known to be vulnerable by design.
 *
 *  MINIMUM SUPPORTED OS WINDOWS 7
 *
@@ -319,19 +326,18 @@ NTSTATUS WINAPI WinIoQueryPML4Value(
 }
 
 /*
-* WinIoReadWritePhysicalMemory
+* WinIoReadPhysicalMemory
 *
 * Purpose:
 *
-* Read/Write physical memory.
+* Read physical memory through mapping.
 *
 */
-NTSTATUS WINAPI WinIoReadWritePhysicalMemory(
+NTSTATUS WINAPI WinIoReadPhysicalMemory(
     _In_ HANDLE DeviceHandle,
     _In_ ULONG_PTR PhysicalAddress,
     _In_reads_bytes_(NumberOfBytes) PVOID Buffer,
-    _In_ ULONG NumberOfBytes,
-    _In_ BOOLEAN DoWrite)
+    _In_ ULONG NumberOfBytes)
 {
     NTSTATUS ntStatus;
     PVOID mappedSection = NULL;
@@ -353,12 +359,7 @@ NTSTATUS WINAPI WinIoReadWritePhysicalMemory(
 
         __try {
 
-            if (DoWrite) {
-                RtlCopyMemory(mappedSection, Buffer, NumberOfBytes);
-            }
-            else {
-                RtlCopyMemory(Buffer, mappedSection, NumberOfBytes);
-            }
+            RtlCopyMemory(Buffer, mappedSection, NumberOfBytes);
 
         }
         __except (EXCEPTION_EXECUTE_HANDLER)
@@ -377,48 +378,6 @@ NTSTATUS WINAPI WinIoReadWritePhysicalMemory(
     }
 
     return ntStatus;
-}
-
-/*
-* WinIoReadPhysicalMemory
-*
-* Purpose:
-*
-* Read from physical memory.
-*
-*/
-NTSTATUS WINAPI WinIoReadPhysicalMemory(
-    _In_ HANDLE DeviceHandle,
-    _In_ ULONG_PTR PhysicalAddress,
-    _In_ PVOID Buffer,
-    _In_ ULONG NumberOfBytes)
-{
-    return WinIoReadWritePhysicalMemory(DeviceHandle,
-        PhysicalAddress,
-        Buffer,
-        NumberOfBytes,
-        FALSE);
-}
-
-/*
-* WinIoWritePhysicalMemory
-*
-* Purpose:
-*
-* Write to physical memory.
-*
-*/
-NTSTATUS WINAPI WinIoWritePhysicalMemory(
-    _In_ HANDLE DeviceHandle,
-    _In_ ULONG_PTR PhysicalAddress,
-    _In_reads_bytes_(NumberOfBytes) PVOID Buffer,
-    _In_ ULONG NumberOfBytes)
-{
-    return WinIoReadWritePhysicalMemory(DeviceHandle,
-        PhysicalAddress,
-        Buffer,
-        NumberOfBytes,
-        TRUE);
 }
 
 /*
@@ -441,8 +400,8 @@ NTSTATUS WINAPI WinIoVirtualToPhysical(
     }
 
     return PwVirtualToPhysical(DeviceHandle,
-        (provQueryPML4)WinIoQueryPML4Value,
-        (provReadPhysicalMemory)WinIoReadPhysicalMemory,
+        WinIoQueryPML4Value,
+        WinIoReadPhysicalMemory,
         VirtualAddress,
         PhysicalAddress);
 }
@@ -470,45 +429,10 @@ NTSTATUS WINAPI WinIoReadKernelVirtualMemory(
 
     if (NT_SUCCESS(ntStatus)) {
 
-        ntStatus = WinIoReadWritePhysicalMemory(DeviceHandle,
+        ntStatus = WinIoReadPhysicalMemory(DeviceHandle,
             physicalAddress,
             Buffer,
-            NumberOfBytes,
-            FALSE);
-
-    }
-
-    return ntStatus;
-}
-
-/*
-* WinIoWriteKernelVirtualMemory
-*
-* Purpose:
-*
-* Write virtual memory.
-*
-*/
-BOOL WINAPI WinIoWriteKernelVirtualMemory(
-    _In_ HANDLE DeviceHandle,
-    _In_ ULONG_PTR Address,
-    _In_reads_bytes_(NumberOfBytes) PVOID Buffer,
-    _In_ ULONG NumberOfBytes)
-{
-    NTSTATUS ntStatus;
-    ULONG_PTR physicalAddress = 0;
-
-    ntStatus = WinIoVirtualToPhysical(DeviceHandle,
-        Address,
-        &physicalAddress);
-
-    if (NT_SUCCESS(ntStatus)) {
-
-        ntStatus = WinIoReadWritePhysicalMemory(DeviceHandle,
-            physicalAddress,
-            Buffer,
-            NumberOfBytes,
-            TRUE);
+            NumberOfBytes);
 
     }
 
@@ -530,33 +454,48 @@ BOOL WinIoReadSystemMemoryEx(
     _Out_opt_ PULONG NumberOfBytesRead
 )
 {
+    BOOL bResult = FALSE;
     IO_STATUS_BLOCK iost;
     NTSTATUS ntStatus;
+    PVOID lockedBuffer = NULL;
 
-    ntStatus = WinIoReadKernelVirtualMemory(g_kdctx.DeviceHandle,
-        Address,
-        Buffer,
-        BufferSize);
+    if (NumberOfBytesRead)
+        *NumberOfBytesRead = 0;
 
-    if (!NT_SUCCESS(ntStatus)) {
+    lockedBuffer = supVirtualAlloc(BufferSize);
+    if (lockedBuffer) {
 
-        if (NumberOfBytesRead)
-            *NumberOfBytesRead = 0;
+        if (VirtualLock(lockedBuffer, BufferSize)) {
 
-        iost.Status = ntStatus;
-        iost.Information = 0;
+            ntStatus = WinIoReadKernelVirtualMemory(g_kdctx.DeviceHandle,
+                Address,
+                lockedBuffer,
+                BufferSize);
 
-        if (g_kdctx.ShowKdError)
-            kdShowError(BufferSize, ntStatus, &iost);
-        else
-            SetLastError(RtlNtStatusToDosError(ntStatus));
+            if (!NT_SUCCESS(ntStatus)) {
 
-        return FALSE;
+                iost.Status = ntStatus;
+                iost.Information = 0;
+
+                if (g_kdctx.ShowKdError)
+                    kdShowError(BufferSize, ntStatus, &iost);
+                else
+                    SetLastError(RtlNtStatusToDosError(ntStatus));
+            }
+            else {
+                if (NumberOfBytesRead)
+                    *NumberOfBytesRead = BufferSize;
+
+                RtlCopyMemory(Buffer, lockedBuffer, BufferSize);
+
+                bResult = TRUE;
+            }
+
+            VirtualUnlock(lockedBuffer, BufferSize);
+        }
+
+        supVirtualFree(lockedBuffer);
     }
-    else {
-        if (NumberOfBytesRead)
-            *NumberOfBytesRead = BufferSize;
 
-        return TRUE;
-    }
+    return bResult;
 }

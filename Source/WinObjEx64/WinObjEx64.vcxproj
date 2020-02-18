@@ -210,6 +210,10 @@
     <Bscmake>
       <SuppressStartupBanner>false</SuppressStartupBanner>
     </Bscmake>
+    <ResourceCompile />
+    <ResourceCompile>
+      <PreprocessorDefinitions>_UseOwnDriver;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>

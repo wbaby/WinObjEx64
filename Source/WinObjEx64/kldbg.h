@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.84
 *
-*  DATE:        15 Feb 2019
+*  DATE:        18 Feb 2019
 *
 *  Common header file for the Kernel Debugger Driver support.
 *
@@ -20,12 +20,14 @@
 
 #define IOCTL_KD_PASS_THROUGH CTL_CODE(FILE_DEVICE_UNKNOWN, 0x1, METHOD_NEITHER, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
-#ifdef _USE_OWN_DRIVER 
+#ifdef _USE_OWN_DRIVER
+#ifdef _USE_WINIO
 #define KLDBGDRV                L"EneTechIo"
+#define KLDBGDRVSYS             L"\\drivers\\ene64drv.sys"
+#else
+#define KLDBGDRV                L"wodbgdrv"
 #define KLDBGDRVSYS             L"\\drivers\\wodbgdrv.sys"
-
-//#define KLDBGDRV                L"wodbgdrv"
-//#define KLDBGDRVSYS             L"\\drivers\\wodbgdrv.sys"
+#endif
 #else
 #define KLDBGDRV                L"kldbgdrv"
 #define KLDBGDRVSYS             L"\\drivers\\kldbgdrv.sys"
@@ -370,10 +372,15 @@ BOOL kdpReadSystemMemoryEx(
     _Out_opt_ PULONG NumberOfBytesRead);
 
 #ifdef _USE_OWN_DRIVER
+#ifdef _USE_WINIO
 #define kdReadSystemMemoryEx WinIoReadSystemMemoryEx
+#else
+#define kdReadSystemMemoryEx kdpReadSystemMemoryEx
+#endif
 #else 
 #define kdReadSystemMemoryEx kdpReadSystemMemoryEx
 #endif
+
 #define kdReadSystemMemory(Address, Buffer, BufferSize) \
     kdReadSystemMemoryEx(Address, Buffer, BufferSize, NULL)
 
